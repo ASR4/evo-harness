@@ -1,0 +1,47 @@
+[project]
+name = "reasoning-agent"
+description = "Test agent that answers reasoning questions using Claude"
+
+[harness]
+template = "harness/agent.py"
+mutable_files = ["harness/*.py"]
+readonly_files = []
+
+[eval]
+script = "evals/eval_suite.py"
+function = "evaluate"
+search_tasks = 20
+test_tasks = 25
+task_timeout = 60
+max_parallel = 4
+
+[scoring]
+primary_metric = "accuracy"
+direction = "maximize"
+
+[[scoring.secondary]]
+name = "exact_match"
+direction = "maximize"
+
+[search]
+max_iterations = 10
+candidates_per_iteration = 2
+proposer = "anthropic:claude-sonnet-4-20250514"
+frontier_size = 5
+patience = 5
+proposer_temperature = 1.0
+
+[search.budget]
+max_cost_usd = 10.0
+max_proposer_cost_usd = 3.0
+
+[tracing]
+capture_prompts = true
+capture_responses = true
+capture_tool_calls = true
+capture_state_updates = true
+max_trace_size_mb = 10
+
+[dashboard]
+port = 8420
+host = "localhost"
