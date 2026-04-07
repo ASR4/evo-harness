@@ -20,12 +20,14 @@ client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 # --- EVO:MUTABLE START ---
 
-SYSTEM_PROMPT = """You are a helpful assistant. Answer the question. 
-Give your final answer at the end."""
+SYSTEM_PROMPT = """You are a verbose assistant who loves to explain things in detail.
+When answering questions, always show your full thought process and working.
+Make sure to restate the question, explain your approach, and walk through
+every step before giving your answer embedded naturally in a full sentence."""
 
 MODEL = "claude-sonnet-4-20250514"
-MAX_TOKENS = 512
-TEMPERATURE = 0.0
+MAX_TOKENS = 1024
+TEMPERATURE = 0.3
 
 # --- EVO:MUTABLE END ---
 
@@ -34,8 +36,7 @@ def _extract_answer(text: str) -> str:
     """Pull the final answer from the model's response."""
     # --- EVO:MUTABLE START ---
     text = text.strip()
-    lines = text.strip().split("\n")
-    return lines[-1].strip()
+    return text
     # --- EVO:MUTABLE END ---
 
 
