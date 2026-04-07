@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evoharness"
+version = "0.1.0"
+description = "Automatically improve LLM agent harnesses through evolutionary search"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+readme = "README.md"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.0",
+    "anthropic>=0.52",
+    "pydantic>=2.5",
+    "tomli>=2.0; python_version < '3.12'",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.30"]
+dashboard = ["fastapi>=0.115", "uvicorn>=0.30", "websockets>=12.0"]
+docker = ["docker>=7.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
+
+[project.scripts]
+evo = "evoharness.cli.main:app"
+evo-query = "evoharness.experience_cli.evo_query:app"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
