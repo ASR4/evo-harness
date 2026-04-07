@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -14,6 +15,19 @@ from evoharness import __version__
 from evoharness.core.config import load_config
 
 console = Console()
+
+
+def _load_dotenv(project_dir: Path) -> None:
+    """Load .env from the project directory into os.environ (setdefault)."""
+    env_file = project_dir / ".env"
+    if not env_file.is_file():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
 
 
 def run(
@@ -73,6 +87,8 @@ def run(
     if not config_path.is_file():
         console.print(f"[red]Config not found:[/red] {config_path}")
         raise typer.Exit(code=1)
+
+    _load_dotenv(config_path.parent.resolve())
 
     try:
         config = load_config(config_path)
