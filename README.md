@@ -148,6 +148,140 @@ evo report              # Generate a markdown summary
 evo report -o report.md # Save report to file
 ```
 
+## Example: Reasoning QA Agent
+
+A complete working example lives in `examples/reasoning-agent/`. It demonstrates the full EvoHarness cycle: a deliberately weak agent that gets optimized to perfect accuracy.
+
+### Project structure
+
+```
+examples/reasoning-agent/
+├── evo.toml                  # Project config (metrics, budget, proposer)
+├── .env.example              # Required environment variables template
+├── .gitignore                # Ignores .env, .evo/, __pycache__
+├── harness/
+│   ├── __init__.py
+│   └── agent.py              # LLM-powered QA agent (the code being evolved)
+└── evals/
+    └── eval_suite.py         # 25 tasks with ground truth answers + scoring
+```
+
+### The agent
+
+The harness is a Claude-powered question answering agent with two optimizable components marked with `EVO:MUTABLE`:
+
+```python
+# --- EVO:MUTABLE START ---
+
+SYSTEM_PROMPT = """You are a verbose assistant who loves to explain things in detail.
+When answering questions, always show your full thought process and working.
+Make sure to restate the question, explain your approach, and walk through
+every step before giving your answer embedded naturally in a full sentence."""
+
+MODEL = "claude-sonnet-4-20250514"
+MAX_TOKENS = 1024
+TEMPERATURE = 0.3
+
+# --- EVO:MUTABLE END ---
+
+
+def _extract_answer(text: str) -> str:
+    # --- EVO:MUTABLE START ---
+    text = text.strip()
+    return text            # Returns the ENTIRE response — no extraction
+    # --- EVO:MUTABLE END ---
+```
+
+**The gap**: The verbose prompt makes Claude produce paragraphs of explanation, and `_extract_answer` returns the raw response. The correct answer is always *in* the text, but never cleanly extracted.
+
+### The eval suite
+
+25 tasks across 5 categories (arithmetic, word problems, logic, general knowledge, reasoning) with deterministic expected answers. Three scoring metrics:
+
+| Metric | Score |
+|--------|-------|
+| `exact_match` | 1.0 if normalized output == expected, else 0.0 |
+| `contains_match` | 1.0 if expected appears anywhere in output, else 0.0 |
+| `accuracy` | 1.0 (exact), 0.5 (contains only), 0.0 (miss) |
+
+### Running the example
+
+```bash
+cd examples/reasoning-agent
+
+# Set your API key (or copy .env.example to .env and fill it in)
+cp .env.example .env
+# Edit .env with your ANTHROPIC_API_KEY
+
+# Run the evolution (3 iterations, ~$2, ~7 minutes)
+evo run -c evo.toml --iterations 3
+
+# Check results
+evo status -c evo.toml
+evo inspect 001 -c evo.toml
+```
+
+### What happens
+
+The baseline scores 0.50 accuracy / 0.00 exact match. Over 3 iterations:
+
+| Candidate | Strategy | Accuracy | Exact Match | What changed |
+|-----------|----------|----------|-------------|--------------|
+| 000 | baseline | 0.50 | 0.00 | Verbose prompt, no extraction |
+| 001 | `llm_extraction` | 0.975 | 0.95 | Added a second LLM call to extract clean answers |
+| 002 | `hybrid_unit_stripping` | 1.00 | 1.00 | Fixed edge case: strips units when question says "just the number" |
+| 003 | `single_call_efficiency` | 1.00 | 1.00 | Replaced 2-call approach with `FINAL ANSWER:` prompt format + regex — same accuracy, 50% cheaper |
+
+The proposer follows the diagnostic process: reads traces from failed tasks, forms a causal hypothesis, applies targeted fixes, and validates.
+
+### Promoting the winner
+
+EvoHarness stores evolved candidates in `.evo/candidates/` without modifying your original files. To adopt the best candidate:
+
+```bash
+# Copy the winning candidate's code over your original
+cp .evo/candidates/003/harness/agent.py harness/agent.py
+
+# Verify the diff
+git diff harness/agent.py
+
+# Commit
+git add harness/agent.py
+git commit -m "Adopt EvoHarness candidate 003: single_call_efficiency (1.0 accuracy)"
+```
+
+### Evolved code (candidate 003)
+
+After evolution, the agent's mutable sections were rewritten to:
+
+```python
+# --- EVO:MUTABLE START ---
+
+SYSTEM_PROMPT = """You are a helpful assistant who shows your reasoning
+but provides clean final answers. Show your thought process, but always
+end your response with:
+
+FINAL ANSWER: [your exact answer]
+
+If the question asks for "just the number", provide only the number
+without units in your FINAL ANSWER."""
+
+# --- EVO:MUTABLE END ---
+
+
+def _extract_answer(text: str, original_question: str = "") -> str:
+    # --- EVO:MUTABLE START ---
+    # Look for FINAL ANSWER: pattern
+    match = re.search(r'FINAL ANSWER:\s*(.+?)(?:\n|$)', text, re.IGNORECASE)
+    if match:
+        answer = match.group(1).strip().strip('.,!?')
+        return answer
+    # Fallback regex patterns for edge cases...
+    # --- EVO:MUTABLE END ---
+```
+
+The proposer independently discovered structured output formatting (`FINAL ANSWER:`) and context-aware unit stripping — techniques that are well-established in prompt engineering but were derived purely from trace analysis.
+
 ## CLI Reference
 
 ### `evo` — Main CLI
